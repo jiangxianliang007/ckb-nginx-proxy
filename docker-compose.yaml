@@ -1,7 +1,7 @@
 version: '3.3'
 services:
   ckb-nginx-proxy:
-    image: jiangxianliang/ckb-nginx-proxy:1.21.6
+    image: jiangxianliang/ckb-nginx-proxy:1.21.6-v3
     restart: always
     ports:
       - "80:80"

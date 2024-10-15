@@ -27,6 +27,10 @@ git clone https://github.com/cryptape/ckb-nginx-proxy.git
 cd ckb-nginx-proxy
 
 sed -i "s/DEFAULT_CKR_RPC_IP:8114/192.168.1.100:8114/" nginx.conf 
+
+sed -i "s/rich_indexer_rpc/your rich-indexer/" nginx.conf 
+
+Fill in the real discord webhook in nginx.conf
 ```
 
 ## run proxy
