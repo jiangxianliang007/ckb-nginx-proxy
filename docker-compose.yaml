@@ -1,9 +1,15 @@
-version: '3.3'
 services:
   ckb-nginx-proxy:
-    image: jiangxianliang/ckb-nginx-proxy:1.21.6
+    image: jiangxianliang007/ckb-nginx-proxy:latest
+    container_name: ckb-nginx-proxy
     restart: always
     ports:
       - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -1,5 +1,5 @@
 ## Introduce
-Use nginx +lua to restrict some of the ckb methods from being requested
+Use nginx+lua to restrict some of the ckb methods from being requested
 
 ## List of restricted methods
 ```
@@ -19,7 +19,7 @@ apt install docker
 
 ## clone code
 ```
-git clone https://github.com/cryptape/ckb-nginx-proxy.git
+git clone https://github.com/jiangxianliang007/ckb-nginx-proxy.git
 ```
 
 ## Replace the default value with your ckb rpc address, Suppose your rpc IP is 192.168.1.100
@@ -33,6 +33,30 @@ sed -i "s/DEFAULT_CKR_RPC_IP:8114/192.168.1.100:8114/" nginx.conf
 ```
 docker-compose up -d
 ```
+
+## Docker image
+
+The pre-built image is published to Docker Hub as `jiangxianliang007/ckb-nginx-proxy:latest`.
+
+To pull it directly:
+```
+docker pull jiangxianliang007/ckb-nginx-proxy:latest
+```
+
+## CI / Automated builds
+
+A GitHub Actions workflow (`.github/workflows/docker-build.yml`) automatically builds and pushes the Docker image to Docker Hub:
+
+- **Pull requests** – image is built but **not** pushed (smoke-test only).
+- **Push to `main`** – image is built and pushed with the `latest` tag.
+- **Version tags (`v*`)** – image is built and pushed with the corresponding semver tag.
+
+To enable pushing from your own fork, add the following repository secrets in **Settings → Secrets and variables → Actions**:
+
+| Secret | Description |
+|---|---|
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | A Docker Hub access token with write permission |
 
 ## Examples
 Note that http://192.168.1.100:80 needs to be changed to the IP of your proxy
