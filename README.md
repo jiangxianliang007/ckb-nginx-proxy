@@ -1,5 +1,5 @@
 ## Introduce
-Use nginx +lua to restrict some of the ckb methods from being requested
+Use nginx + lua to restrict some of the CKB RPC methods from being requested.
 
 ## List of restricted methods
 ```
@@ -11,34 +11,47 @@ remove_node
 remove_transaction
 clear_tx_pool
 ```
-## You need to install docker-compose and docker
+
+## CI / Docker image
+
+A GitHub Actions workflow (`.github/workflows/docker-build.yml`) automatically builds and pushes the Docker image to GitHub Container Registry (GHCR) on every push to `main` and on version tags (`v*`).
+
+The image is published at:
 ```
-apt install docker-compose
+ghcr.io/nervosnetwork/ckb-nginx-proxy:latest
+```
+
+Forks automatically get their own GHCR image — no extra configuration is needed in the workflow.
+
+## Prerequisites
+```
 apt install docker
 ```
+Docker Compose v2 is bundled with modern Docker Engine (no separate install needed).
 
-## clone code
+## Clone code
 ```
-git clone https://github.com/cryptape/ckb-nginx-proxy.git
+git clone https://github.com/nervosnetwork/ckb-nginx-proxy.git
 ```
 
-## Replace the default value with your ckb rpc address, Suppose your rpc IP is 192.168.1.100
+## Replace the default value with your CKB RPC address
+
+Suppose your RPC IP is `192.168.1.100`:
 ```
 cd ckb-nginx-proxy
 
-sed -i "s/DEFAULT_CKR_RPC_IP:8114/192.168.1.100:8114/" nginx.conf 
+sed -i "s/DEFAULT_CKR_RPC_IP:8114/192.168.1.100:8114/" nginx.conf
 ```
 
-## run proxy
+## Run proxy
 ```
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Examples
-Note that http://192.168.1.100:80 needs to be changed to the IP of your proxy
+Note that `http://192.168.1.100:80` needs to be changed to the IP of your proxy.
 
-get tip block hash and number
-
+Get tip block hash and number:
 ```
 echo '{
     "id": 2,
@@ -72,8 +85,7 @@ result
 }
 ```
 
-execute clear_tx_pool
-
+Execute `clear_tx_pool` (blocked):
 ```
 echo '{
     "id": 2,
