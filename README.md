@@ -22,18 +22,7 @@ from the gateway server's outbound IP.
 Do not commit `.env`, private keys or tokens. Restart the container after changing
 `.env`; environment variables are loaded at container creation time.
 
-## Node routes
-
-| Node | Upstream | Biscuit |
-| --- | --- | --- |
-| fiber-mainnet-bootnode-hk | 43.199.24.44:8227 | No |
-| fiber-mainnet-bootnode-sgd | 54.255.71.126:8227 | No |
-| fiber-mainnet-public-tokyo | 54.178.252.1:8227 | FIBER_TOKYO_BISCUIT_TOKEN |
-| fiber-mainnet-public-ca | 52.52.69.223:8227 | FIBER_CA_BISCUIT_TOKEN |
-| fiber-testnet-bootnode-hk | 16.163.7.105:8117 | No |
-| fiber-testnet-bootnode-sgd | 54.179.226.154:8117 | No |
-| fiber-testnet-01 | 18.162.235.225:8117 | No |
-| fiber-testnet-02 | 18.163.221.211:8117 | No |
+## Calling the gateway
 
 Call `POST /rpc/<node-name>` with `Authorization: Bearer <AI_RPC_TOKEN>`.
 
