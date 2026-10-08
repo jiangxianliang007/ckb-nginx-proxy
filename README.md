@@ -13,9 +13,10 @@ docker compose up -d --build
 docker compose exec fiber-rpc-gateway nginx -t
 ```
 
-The service binds to `127.0.0.1:8080`. Put Cloudflare Tunnel or a TLS reverse
-proxy in front of it for remote AI access. If changing the bind address, restrict
-access appropriately. Each Fiber security group should allow its RPC port only
+The service publishes port 80 on all IPv4 interfaces (`0.0.0.0:80:80`).
+A domain pointing to the server can reach the gateway over HTTP when the server
+security group/firewall allows inbound TCP port 80. Use Cloudflare Tunnel or a
+TLS reverse proxy for HTTPS access, and restrict inbound access as appropriate. Each Fiber security group should allow its RPC port only
 from the gateway server's outbound IP.
 
 Do not commit `.env`, private keys or tokens. Restart the container after changing
