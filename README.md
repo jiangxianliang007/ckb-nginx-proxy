@@ -1,89 +1,105 @@
-## Introduce
-Use nginx +lua to restrict some of the ckb methods from being requested
+# Fiber RPC gateway for AI log analysis
 
-## List of restricted methods
-```
-clear_banned_addresses
-set_ban
-set_network_active
-add_node
-remove_node
-remove_transaction
-clear_tx_pool
-```
-## You need to install docker-compose and docker
-```
-apt install docker-compose
-apt install docker
+An Nginx/Lua gateway for eight Fiber nodes. Based on the `fiber-proxy` branch.
+Only explicitly allowlisted JSON-RPC methods are forwarded.
+
+## Deployment
+
+```bash
+cp .env.example .env
+chmod 600 .env
+# Fill in a strong AI_RPC_TOKEN and the two node-specific Biscuit tokens.
+docker compose up -d --build
+docker compose exec fiber-rpc-gateway nginx -t
 ```
 
-## clone code
-```
-git clone https://github.com/cryptape/ckb-nginx-proxy.git
+The service binds to `127.0.0.1:8080`. Put Cloudflare Tunnel or a TLS reverse
+proxy in front of it for remote AI access. If changing the bind address, restrict
+access appropriately. Each Fiber security group should allow its RPC port only
+from the gateway server's outbound IP.
+
+Do not commit `.env`, private keys or tokens. Restart the container after changing
+`.env`; environment variables are loaded at container creation time.
+
+## Node routes
+
+| Node | Upstream | Biscuit |
+| --- | --- | --- |
+| fiber-mainnet-bootnode-hk | 43.199.24.44:8227 | No |
+| fiber-mainnet-bootnode-sgd | 54.255.71.126:8227 | No |
+| fiber-mainnet-public-tokyo | 54.178.252.1:8227 | FIBER_TOKYO_BISCUIT_TOKEN |
+| fiber-mainnet-public-ca | 52.52.69.223:8227 | FIBER_CA_BISCUIT_TOKEN |
+| fiber-testnet-bootnode-hk | 16.163.7.105:8117 | No |
+| fiber-testnet-bootnode-sgd | 54.179.226.154:8117 | No |
+| fiber-testnet-01 | 18.162.235.225:8117 | No |
+| fiber-testnet-02 | 18.163.221.211:8117 | No |
+
+Call `POST /rpc/<node-name>` with `Authorization: Bearer <AI_RPC_TOKEN>`.
+
+```bash
+curl https://<gateway-domain>/rpc/fiber-mainnet-public-tokyo \
+  -H "Authorization: Bearer ${AI_RPC_TOKEN}" \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"node_info","params":[]}'
 ```
 
-## Replace the default value with your ckb rpc address, Suppose your rpc IP is 192.168.1.100
-```
-cd ckb-nginx-proxy
+The AI token is replaced before forwarding. Nodes without Biscuit receive no
+Authorization header. Tokyo and California receive their own configured Biscuit
+token; Fiber verifies it using the node's existing `biscuit_public_key`. The
+gateway neither needs the public key nor signs tokens.
 
-sed -i "s/DEFAULT_CKR_RPC_IP:8114/192.168.1.100:8114/" nginx.conf 
-```
+Generate each Biscuit token with the corresponding node's private key outside
+this repository. Suggested read permissions (add an expiry as appropriate):
 
-## run proxy
-```
-docker-compose up -d
-```
-
-## Examples
-Note that http://192.168.1.100:80 needs to be changed to the IP of your proxy
-
-get tip block hash and number
-
-```
-echo '{
-    "id": 2,
-    "jsonrpc": "2.0",
-    "method": "get_tip_header",
-    "params": []
-}' \
-| tr -d '\n' \
-| curl -H 'content-type: application/json' -d @- \
-http://192.168.1.100:80
-```
-result
-```
-{
-    "jsonrpc": "2.0",
-    "result": {
-        "compact_target": "0x1d090fbe",
-        "dao": "0xba17553fab3db84154bc4aa9f09b2600e826a2b0df99010400ed51b4686b5808",
-        "epoch": "0x7080687001539",
-        "extra_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "hash": "0x7a46e779a3fc2d5b55c82aad852e721b0097bf873927b9751409b1d185599ce4",
-        "nonce": "0xd265e70dfd205dbbed33b29294121856",
-        "number": "0x7037f2",
-        "parent_hash": "0x3d105fe9ec60f138baa6623abd16af70ba1be90ad23d1943bcaa55d5f14fcb6f",
-        "proposals_hash": "0x2581d1769886226a8c90ee99baf2d8696e24c7f6bb6751748ff8b4452f8006e5",
-        "timestamp": "0x1847a2bfad2",
-        "transactions_root": "0x28157a5962c4ae1d3e153b1d8d331e5fd3c158866287f5398ab7f7d38210dfb0",
-        "version": "0x0"
-    },
-    "id": 2
-}
+```datalog
+read("node");
+read("peers");
+read("channels");
+read("graph");
+read("invoices");
+read("payments");
 ```
 
-execute clear_tx_pool
+See [Fiber Biscuit documentation](https://github.com/nervosnetwork/fiber/blob/develop/docs/biscuit-auth.md).
+Invalid, expired or insufficiently privileged Biscuit tokens are rejected by Fiber.
+Upstream RPC responses, including authorization failures, are passed through.
 
+## Default method whitelist
+
+Edit `lua/config.lua` to change this list; restart/reload Nginx after editing.
+
+- `node_info`
+- `list_peers`
+- `list_channels`
+- `graph_nodes`
+- `graph_channels`
+- `get_invoice`
+- `parse_invoice`
+- `get_payment`
+
+Write methods and unknown/new methods are denied by default. `build_router` is
+excluded to keep the initial diagnostic interface small. Method availability and
+parameters depend on the Fiber version running on each node.
+
+Only a single JSON-RPC 2.0 request with a string or numeric ID is accepted.
+Batches, notifications, malformed JSON, encoded bodies and query parameters are
+rejected. The inspected JSON is re-encoded before forwarding to prevent duplicate
+key interpretation differences. Request bodies and credentials are not logged.
+
+Defaults: 256 KiB body limit, 5 requests/second/IP with burst 10, 5 concurrent
+requests/IP, 5 second connect timeout and 30 second upstream read/send timeout.
+Behind a tunnel, the IP limits may be shared by all clients. Nginx timeouts measure
+inactivity, not total execution duration. Gateway-to-node traffic uses HTTP as
+provided; use private networking or an encrypted tunnel if transport encryption
+is required.
+
+## Validation
+
+```bash
+python -m pip install lupa
+python -m unittest discover -s tests -v
 ```
-echo '{
-    "id": 2,
-    "jsonrpc": "2.0",
-    "method": "clear_tx_pool",
-    "params": []
-}' | tr -d '\n' | curl -H 'content-type: application/json' -d @- \
-http://192.168.1.100:80
-```
-result
-```
-This method Access forbidden
-```
+
+The unit suite executes the Lua access handler with a mocked Nginx API. For real
+container validation, run `nginx -t` above and test allowed/denied requests after
+supplying credentials. No production node calls are needed for unit tests.
