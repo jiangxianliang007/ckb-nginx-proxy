@@ -3,6 +3,8 @@ services:
   ckb-nginx-proxy:
     image: jiangxianliang/ckb-nginx-proxy:1.21.6
     restart: always
+    environment:
+      FIBER_RPC_TOKEN: ${FIBER_RPC_TOKEN:?Set a backend Biscuit token}
     ports:
       - "80:80"
     volumes:
