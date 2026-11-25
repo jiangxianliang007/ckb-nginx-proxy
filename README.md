@@ -1,89 +1,61 @@
-## Introduce
-Use nginx +lua to restrict some of the ckb methods from being requested
+# Fiber RPC proxy
 
-## List of restricted methods
-```
-clear_banned_addresses
-set_ban
-set_network_active
-add_node
-remove_node
-remove_transaction
-clear_tx_pool
-```
-## You need to install docker-compose and docker
-```
-apt install docker-compose
-apt install docker
-```
+NGINX + Lua filters restricted Fiber RPC methods and authenticates upstream requests using a server-side Biscuit token. Clients do not need the upstream token. This is a shared public RPC proxy, not a tenant-authenticated LSP gateway.
 
-## clone code
-```
-git clone https://github.com/cryptape/ckb-nginx-proxy.git
-```
+## Configuration
 
-## Replace the default value with your ckb rpc address, Suppose your rpc IP is 192.168.1.100
-```
-cd ckb-nginx-proxy
-
-sed -i "s/DEFAULT_CKR_RPC_IP:8114/192.168.1.100:8114/" nginx.conf 
-```
-
-## run proxy
-```
-docker-compose up -d
-```
-
-## Examples
-Note that http://192.168.1.100:80 needs to be changed to the IP of your proxy
-
-get tip block hash and number
+1. Enable `rpc.biscuit_public_key` on Fiber. Keep the backend RPC private and reachable only from trusted hosts.
+2. Generate a dedicated least-privilege Biscuit token using the [Fiber authentication guide](https://github.com/nervosnetwork/fiber/blob/develop/docs/biscuit-auth.md). For a public read-only proxy, start with:
 
 ```
-echo '{
-    "id": 2,
-    "jsonrpc": "2.0",
-    "method": "get_tip_header",
-    "params": []
-}' \
-| tr -d '\n' \
-| curl -H 'content-type: application/json' -d @- \
-http://192.168.1.100:80
-```
-result
-```
-{
-    "jsonrpc": "2.0",
-    "result": {
-        "compact_target": "0x1d090fbe",
-        "dao": "0xba17553fab3db84154bc4aa9f09b2600e826a2b0df99010400ed51b4686b5808",
-        "epoch": "0x7080687001539",
-        "extra_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "hash": "0x7a46e779a3fc2d5b55c82aad852e721b0097bf873927b9751409b1d185599ce4",
-        "nonce": "0xd265e70dfd205dbbed33b29294121856",
-        "number": "0x7037f2",
-        "parent_hash": "0x3d105fe9ec60f138baa6623abd16af70ba1be90ad23d1943bcaa55d5f14fcb6f",
-        "proposals_hash": "0x2581d1769886226a8c90ee99baf2d8696e24c7f6bb6751748ff8b4452f8006e5",
-        "timestamp": "0x1847a2bfad2",
-        "transactions_root": "0x28157a5962c4ae1d3e153b1d8d331e5fd3c158866287f5398ab7f7d38210dfb0",
-        "version": "0x0"
-    },
-    "id": 2
-}
+read("node");
+read("graph");
 ```
 
-execute clear_tx_pool
+Grant other read permissions only if their data is intended to be public. Do not use an admin, tenant, or write-capable token for this public proxy.
+3. Set the upstream address in `nginx.conf` and create a local `.env` file with restrictive permissions (do not commit it):
+
+```sh
+umask 077
+touch .env
+chmod 600 .env
+```
+
+Set `FIBER_RPC_TOKEN=<raw Biscuit token>` in that file, without the Bearer prefix. Then run:
+
+```sh
+docker compose up -d --force-recreate
+docker compose exec ckb-nginx-proxy nginx -t
+```
+
+Missing or malformed token configuration prevents NGINX startup. Fiber validates the signature, expiry and method permissions. Rotate the token by updating the local file and recreating the container. Environment variables are visible to privileged Docker operators. Do not enable debug logging or expose backend traffic to untrusted networks.
+
+## Restricted methods
+
+The existing denylist remains in effect for single and batch requests:
 
 ```
-echo '{
-    "id": 2,
-    "jsonrpc": "2.0",
-    "method": "clear_tx_pool",
-    "params": []
-}' | tr -d '\n' | curl -H 'content-type: application/json' -d @- \
-http://192.168.1.100:80
+open_channel
+accept_channel
+shutdown_channel
+update_channel
+commitment_signed
+add_tlc
+remove_tlc
+submit_commitment_transaction
+cancel_invoice
+send_payment
+connect_peer
+disconnect_peer
 ```
-result
+
+The denylist is not a complete authorization policy; the upstream token must enforce least privilege, including for newly introduced RPC methods.
+
+## Verify
+
+```sh
+curl -sS http://127.0.0.1:80/ -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"node_info","params":[]}'
 ```
-This method Access forbidden
-```
+
+Expect a successful response with a valid token granting node read access. A client-supplied Authorization header is replaced, not forwarded. A denied method such as open_channel must return HTTP 403 even if included in a batch. Invalid, expired or insufficiently privileged upstream tokens must be rejected by Fiber.
